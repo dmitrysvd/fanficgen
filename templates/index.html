@@ -106,6 +106,10 @@
         <div class="input-section">
             <label for="prompt">Введите затравку для вашей истории:</label>
             <textarea id="prompt" placeholder="Например: В темном лесу стоял заброшенный замок..."></textarea>
+            
+            <label for="characters">Описание персонажей (необязательно):</label>
+            <textarea id="characters" placeholder="Например: Главный герой - молодой рыцарь по имени Артур, храбрый но неопытный..."></textarea>
+            
             <button onclick="generateStory()" id="generateBtn">Создать историю</button>
         </div>
 
@@ -117,7 +121,8 @@
 
             <div class="continuations">
                 <h3>🎯 Что должно произойти дальше?</h3>
-                <div id="continuationOptions"></div>
+                <textarea id="continuationInput" placeholder="Опишите, что должно произойти дальше в истории..."></textarea>
+                <button onclick="continueStoryWithInput()" id="continueBtn">Продолжить историю</button>
             </div>
         </div>
 
@@ -133,6 +138,8 @@
 
         async function generateStory() {
             const prompt = document.getElementById('prompt').value.trim();
+            const characters = document.getElementById('characters').value.trim();
+            
             if (!prompt) {
                 showError('Пожалуйста, введите затравку истории');
                 return;
@@ -147,14 +154,17 @@
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ prompt: prompt })
+                    body: JSON.stringify({ 
+                        prompt: prompt,
+                        characters: characters
+                    })
                 });
 
                 const data = await response.json();
                 
                 if (response.ok) {
                     currentStory = data.story;
-                    displayStory(data.story, data.continuations);
+                    displayStory(data.story);
                 } else {
                     showError(data.error || 'Произошла ошибка при генерации истории');
                 }
@@ -165,7 +175,14 @@
             }
         }
 
-        async function continueStory(continuation) {
+        async function continueStoryWithInput() {
+            const continuation = document.getElementById('continuationInput').value.trim();
+            
+            if (!continuation) {
+                showError('Пожалуйста, введите описание того, что должно произойти дальше');
+                return;
+            }
+
             showLoading(true);
             hideError();
 
@@ -185,7 +202,8 @@
                 
                 if (response.ok) {
                     currentStory = data.story;
-                    displayStory(data.story, data.continuations);
+                    displayStory(data.story);
+                    document.getElementById('continuationInput').value = '';
                 } else {
                     showError(data.error || 'Произошла ошибка при продолжении истории');
                 }
@@ -196,26 +214,18 @@
             }
         }
 
-        function displayStory(story, continuations) {
+        function displayStory(story) {
             document.getElementById('storyText').innerHTML = story.replace(/\n/g, '<br>');
-            
-            const optionsContainer = document.getElementById('continuationOptions');
-            optionsContainer.innerHTML = '';
-            
-            continuations.forEach((continuation, index) => {
-                const option = document.createElement('div');
-                option.className = 'continuation-option';
-                option.innerHTML = `<strong>Вариант ${index + 1}:</strong> ${continuation}`;
-                option.onclick = () => continueStory(continuation);
-                optionsContainer.appendChild(option);
-            });
-
             document.getElementById('storySection').style.display = 'block';
         }
 
         function showLoading(show) {
             document.getElementById('loading').style.display = show ? 'block' : 'none';
             document.getElementById('generateBtn').disabled = show;
+            const continueBtn = document.getElementById('continueBtn');
+            if (continueBtn) {
+                continueBtn.disabled = show;
+            }
         }
 
         function showError(message) {
@@ -232,6 +242,17 @@
         document.getElementById('prompt').addEventListener('keydown', function(e) {
             if (e.key === 'Enter' && e.ctrlKey) {
                 generateStory();
+            }
+        });
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            const continuationInput = document.getElementById('continuationInput');
+            if (continuationInput) {
+                continuationInput.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter' && e.ctrlKey) {
+                        continueStoryWithInput();
+                    }
+                });
             }
         });
     </script>

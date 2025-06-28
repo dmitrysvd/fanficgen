@@ -27,6 +27,7 @@ MODEL = 'google/gemini-2.5-flash-lite-preview-06-17'
 # Pydantic модели для запросов
 class StoryPrompt(BaseModel):
     prompt: str
+    characters: str = ""
 
 
 class StoryContinuation(BaseModel):
@@ -36,20 +37,23 @@ class StoryContinuation(BaseModel):
 
 class StoryResponse(BaseModel):
     story: str
-    continuations: List[str]
 
 
 class StoryGenerator:
     def __init__(self):
         self.client = httpx.AsyncClient()
 
-    async def generate_story(self, prompt: str) -> str:
-        """Генерирует историю на основе затравки"""
+    async def generate_story(self, prompt: str, characters: str = "") -> str:
+        """Генерирует историю на основе затравки и описания персонажей"""
         headers = {
             "Authorization": f"Bearer {OPENROUTER_API_KEY}",
             "Content-Type": "application/json",
         }
 
+        user_content = f"Напиши начало истории на основе этой затравки: {prompt}"
+        if characters.strip():
+            user_content += f"\n\nОписание персонажей: {characters}"
+        
         data = {
             "model": "google/gemini-2.5-flash",
             "messages": [
@@ -59,7 +63,7 @@ class StoryGenerator:
                 },
                 {
                     "role": "user",
-                    "content": f"Напиши начало истории на основе этой затравки: {prompt}",
+                    "content": user_content,
                 },
             ],
             "max_tokens": 500,
@@ -78,43 +82,6 @@ class StoryGenerator:
         except Exception as e:
             return f"Ошибка при генерации истории: {str(e)}"
 
-    async def generate_continuations(self, story: str) -> List[str]:
-        """Генерирует варианты продолжения истории"""
-        headers = {
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-            "Content-Type": "application/json",
-        }
-
-        continuations = []
-
-        for i in range(3):  # Генерируем 3 варианта
-            data = {
-                "model": MODEL,
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": "Ты талантливый писатель. Предложи краткое описание того, что может произойти дальше в истории.",
-                    },
-                    {
-                        "role": "user",
-                        "content": f"История: {story}\n\nПредложи вариант того, что должно произойти дальше (1-2 предложения):",
-                    },
-                ],
-                "max_tokens": 100,
-                "temperature": 0.9,
-            }
-
-            try:
-                response = await self.client.post(
-                    OPENROUTER_URL, json=data, headers=headers
-                )
-                response.raise_for_status()
-                result = response.json()
-                continuations.append(result["choices"][0]["message"]["content"])
-            except Exception as e:
-                continuations.append(f"Ошибка: {str(e)}")
-
-        return continuations
 
     async def close(self):
         """Закрывает HTTP клиент"""
@@ -141,10 +108,9 @@ async def generate_story(story_prompt: StoryPrompt):
             status_code=400, detail="Необходимо указать затравку истории"
         )
 
-    story = await story_generator.generate_story(story_prompt.prompt)
-    continuations = await story_generator.generate_continuations(story)
+    story = await story_generator.generate_story(story_prompt.prompt, story_prompt.characters)
 
-    return StoryResponse(story=story, continuations=continuations)
+    return StoryResponse(story=story)
 
 
 @app.post("/continue", response_model=StoryResponse)
@@ -161,7 +127,4 @@ async def continue_story(story_continuation: StoryContinuation):
     # Объединяем историю с выбранным продолжением
     extended_story = f"{story_continuation.story}\n\n{story_continuation.continuation}"
 
-    # Генерируем новые варианты продолжения
-    continuations = await story_generator.generate_continuations(extended_story)
-
-    return StoryResponse(story=extended_story, continuations=continuations)
+    return StoryResponse(story=extended_story)
