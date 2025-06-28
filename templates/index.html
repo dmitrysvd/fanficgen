@@ -57,6 +57,9 @@
         button:hover {
             background-color: #0056b3;
         }
+        button[style*="background-color: #28a745"]:hover {
+            background-color: #218838 !important;
+        }
         button:disabled {
             background-color: #ccc;
             cursor: not-allowed;
@@ -117,6 +120,11 @@
             <div class="story-section">
                 <h3>📖 Ваша история:</h3>
                 <div id="storyText"></div>
+                <div style="margin-top: 15px;">
+                    <button onclick="downloadStory()" id="downloadBtn" style="background-color: #28a745;">
+                        💾 Скачать историю
+                    </button>
+                </div>
             </div>
 
             <div class="continuations">
@@ -287,6 +295,51 @@
 
         function hideError() {
             document.getElementById('error').style.display = 'none';
+        }
+
+        async function downloadStory() {
+            if (!currentStory) {
+                showError('Нет истории для скачивания');
+                return;
+            }
+
+            try {
+                const response = await fetch('/download', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ story: currentStory })
+                });
+
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.style.display = 'none';
+                    a.href = url;
+                    
+                    // Получаем имя файла из заголовка ответа
+                    const contentDisposition = response.headers.get('Content-Disposition');
+                    let filename = 'story.txt';
+                    if (contentDisposition) {
+                        const filenameMatch = contentDisposition.match(/filename=(.+)/);
+                        if (filenameMatch) {
+                            filename = filenameMatch[1];
+                        }
+                    }
+                    
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                } else {
+                    showError('Ошибка при скачивании файла');
+                }
+            } catch (error) {
+                showError('Ошибка сети: ' + error.message);
+            }
         }
 
         // Обработка Enter в textarea

@@ -1,11 +1,12 @@
 from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import httpx
 import os
 from typing import List
+from datetime import datetime
 
 app = FastAPI(
     title="Генератор историй",
@@ -33,6 +34,10 @@ class StoryPrompt(BaseModel):
 class StoryContinuation(BaseModel):
     story: str
     continuation: str
+
+
+class StoryDownload(BaseModel):
+    story: str
 
 
 class StoryResponse(BaseModel):
@@ -210,3 +215,27 @@ async def continue_story(story_continuation: StoryContinuation):
     continuations = await story_generator.generate_continuations(extended_story)
 
     return StoryResponse(story=extended_story, continuations=continuations)
+
+
+@app.post("/download")
+async def download_story(story_download: StoryDownload):
+    if not story_download.story.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Нет истории для скачивания"
+        )
+    
+    # Создаем имя файла с текущей датой и временем
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"story_{timestamp}.txt"
+    
+    # Очищаем текст от HTML тегов если они есть
+    clean_story = story_download.story.replace('<br>', '\n').replace('<br/>', '\n')
+    
+    return Response(
+        content=clean_story,
+        media_type="text/plain",
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}"
+        }
+    )
