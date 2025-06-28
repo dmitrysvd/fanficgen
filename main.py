@@ -1,14 +1,32 @@
-from flask import Flask, render_template, request, jsonify
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 import httpx
-import asyncio
 import os
-from typing import List, Dict
+from typing import List
 
-app = Flask(__name__)
+app = FastAPI(title="Генератор историй", description="Веб-сервис для генерации интерактивных историй")
+
+# Настройка шаблонов
+templates = Jinja2Templates(directory="templates")
 
 # Конфигурация для OpenRouter API
 OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY', 'your-api-key-here')
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+# Pydantic модели для запросов
+class StoryPrompt(BaseModel):
+    prompt: str
+
+class StoryContinuation(BaseModel):
+    story: str
+    continuation: str
+
+class StoryResponse(BaseModel):
+    story: str
+    continuations: List[str]
 
 class StoryGenerator:
     def __init__(self):
@@ -80,54 +98,44 @@ class StoryGenerator:
                 continuations.append(f"Ошибка: {str(e)}")
         
         return continuations
+    
+    async def close(self):
+        """Закрывает HTTP клиент"""
+        await self.client.aclose()
 
 story_generator = StoryGenerator()
 
-@app.route('/')
-def index():
-    return render_template('index.html')
+@app.on_event("shutdown")
+async def shutdown_event():
+    await story_generator.close()
 
-@app.route('/generate', methods=['POST'])
-def generate_story():
-    prompt = request.json.get('prompt', '')
-    if not prompt:
-        return jsonify({'error': 'Необходимо указать затравку истории'}), 400
-    
-    # Запускаем асинхронную функцию в синхронном контексте
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        story = loop.run_until_complete(story_generator.generate_story(prompt))
-        continuations = loop.run_until_complete(story_generator.generate_continuations(story))
-        return jsonify({
-            'story': story,
-            'continuations': continuations
-        })
-    finally:
-        loop.close()
+@app.get("/", response_class=HTMLResponse)
+async def index(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
 
-@app.route('/continue', methods=['POST'])
-def continue_story():
-    current_story = request.json.get('story', '')
-    chosen_continuation = request.json.get('continuation', '')
+@app.post("/generate", response_model=StoryResponse)
+async def generate_story(story_prompt: StoryPrompt):
+    if not story_prompt.prompt.strip():
+        raise HTTPException(status_code=400, detail="Необходимо указать затравку истории")
     
-    if not current_story or not chosen_continuation:
-        return jsonify({'error': 'Необходимо указать текущую историю и выбранное продолжение'}), 400
+    story = await story_generator.generate_story(story_prompt.prompt)
+    continuations = await story_generator.generate_continuations(story)
+    
+    return StoryResponse(story=story, continuations=continuations)
+
+@app.post("/continue", response_model=StoryResponse)
+async def continue_story(story_continuation: StoryContinuation):
+    if not story_continuation.story.strip() or not story_continuation.continuation.strip():
+        raise HTTPException(status_code=400, detail="Необходимо указать текущую историю и выбранное продолжение")
     
     # Объединяем историю с выбранным продолжением
-    extended_story = f"{current_story}\n\n{chosen_continuation}"
+    extended_story = f"{story_continuation.story}\n\n{story_continuation.continuation}"
     
     # Генерируем новые варианты продолжения
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        continuations = loop.run_until_complete(story_generator.generate_continuations(extended_story))
-        return jsonify({
-            'story': extended_story,
-            'continuations': continuations
-        })
-    finally:
-        loop.close()
+    continuations = await story_generator.generate_continuations(extended_story)
+    
+    return StoryResponse(story=extended_story, continuations=continuations)
 
-if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
