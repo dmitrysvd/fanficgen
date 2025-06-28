@@ -121,8 +121,14 @@
 
             <div class="continuations">
                 <h3>🎯 Что должно произойти дальше?</h3>
-                <textarea id="continuationInput" placeholder="Опишите, что должно произойти дальше в истории..."></textarea>
-                <button onclick="continueStoryWithInput()" id="continueBtn">Продолжить историю</button>
+                
+                <div id="continuationOptions"></div>
+                
+                <div style="margin-top: 20px;">
+                    <label for="continuationInput">Или введите свой вариант:</label>
+                    <textarea id="continuationInput" placeholder="Опишите, что должно произойти дальше в истории..."></textarea>
+                    <button onclick="continueStoryWithInput()" id="continueBtn">Продолжить историю</button>
+                </div>
             </div>
         </div>
 
@@ -164,7 +170,7 @@
                 
                 if (response.ok) {
                     currentStory = data.story;
-                    displayStory(data.story);
+                    displayStory(data.story, data.continuations);
                 } else {
                     showError(data.error || 'Произошла ошибка при генерации истории');
                 }
@@ -202,7 +208,7 @@
                 
                 if (response.ok) {
                     currentStory = data.story;
-                    displayStory(data.story);
+                    displayStory(data.story, data.continuations);
                     document.getElementById('continuationInput').value = '';
                 } else {
                     showError(data.error || 'Произошла ошибка при продолжении истории');
@@ -214,9 +220,54 @@
             }
         }
 
-        function displayStory(story) {
+        function displayStory(story, continuations = []) {
             document.getElementById('storyText').innerHTML = story.replace(/\n/g, '<br>');
+            
+            const optionsContainer = document.getElementById('continuationOptions');
+            optionsContainer.innerHTML = '';
+            
+            if (continuations && continuations.length > 0) {
+                continuations.forEach((continuation, index) => {
+                    const option = document.createElement('div');
+                    option.className = 'continuation-option';
+                    option.innerHTML = `<strong>Вариант ${index + 1}:</strong> ${continuation}`;
+                    option.onclick = () => continueStory(continuation);
+                    optionsContainer.appendChild(option);
+                });
+            }
+
             document.getElementById('storySection').style.display = 'block';
+        }
+
+        async function continueStory(continuation) {
+            showLoading(true);
+            hideError();
+
+            try {
+                const response = await fetch('/continue', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        story: currentStory, 
+                        continuation: continuation 
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    currentStory = data.story;
+                    displayStory(data.story, data.continuations);
+                } else {
+                    showError(data.error || 'Произошла ошибка при продолжении истории');
+                }
+            } catch (error) {
+                showError('Ошибка сети: ' + error.message);
+            } finally {
+                showLoading(false);
+            }
         }
 
         function showLoading(show) {

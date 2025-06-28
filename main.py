@@ -37,6 +37,7 @@ class StoryContinuation(BaseModel):
 
 class StoryResponse(BaseModel):
     story: str
+    continuations: List[str] = []
 
 
 class StoryGenerator:
@@ -82,6 +83,43 @@ class StoryGenerator:
         except Exception as e:
             return f"Ошибка при генерации истории: {str(e)}"
 
+    async def generate_continuations(self, story: str) -> List[str]:
+        """Генерирует варианты продолжения истории"""
+        headers = {
+            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "Content-Type": "application/json",
+        }
+
+        continuations = []
+
+        for i in range(3):  # Генерируем 3 варианта
+            data = {
+                "model": MODEL,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "Ты талантливый писатель. Предложи краткое описание того, что может произойти дальше в истории.",
+                    },
+                    {
+                        "role": "user",
+                        "content": f"История: {story}\n\nПредложи вариант того, что должно произойти дальше (1-2 предложения):",
+                    },
+                ],
+                "max_tokens": 100,
+                "temperature": 0.9,
+            }
+
+            try:
+                response = await self.client.post(
+                    OPENROUTER_URL, json=data, headers=headers
+                )
+                response.raise_for_status()
+                result = response.json()
+                continuations.append(result["choices"][0]["message"]["content"])
+            except Exception as e:
+                continuations.append(f"Ошибка: {str(e)}")
+
+        return continuations
 
     async def close(self):
         """Закрывает HTTP клиент"""
@@ -109,8 +147,9 @@ async def generate_story(story_prompt: StoryPrompt):
         )
 
     story = await story_generator.generate_story(story_prompt.prompt, story_prompt.characters)
+    continuations = await story_generator.generate_continuations(story)
 
-    return StoryResponse(story=story)
+    return StoryResponse(story=story, continuations=continuations)
 
 
 @app.post("/continue", response_model=StoryResponse)
@@ -126,5 +165,8 @@ async def continue_story(story_continuation: StoryContinuation):
 
     # Объединяем историю с выбранным продолжением
     extended_story = f"{story_continuation.story}\n\n{story_continuation.continuation}"
+    
+    # Генерируем новые варианты продолжения
+    continuations = await story_generator.generate_continuations(extended_story)
 
-    return StoryResponse(story=extended_story)
+    return StoryResponse(story=extended_story, continuations=continuations)
