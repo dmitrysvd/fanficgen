@@ -98,14 +98,14 @@ class StoryGenerator:
                 "messages": [
                     {
                         "role": "system",
-                        "content": "Ты талантливый писатель. Предложи краткое описание того, что может произойти дальше в истории.",
+                        "content": "Ты талантливый писатель. Предложи очень краткое описание того, что может произойти дальше в истории. Отвечай одним коротким предложением.",
                     },
                     {
                         "role": "user",
-                        "content": f"История: {story}\n\nПредложи вариант того, что должно произойти дальше (1-2 предложения):",
+                        "content": f"История: {story}\n\nПредложи краткий вариант того, что должно произойти дальше (одно короткое предложение):",
                     },
                 ],
-                "max_tokens": 100,
+                "max_tokens": 50,
                 "temperature": 0.9,
             }
 
@@ -120,6 +120,41 @@ class StoryGenerator:
                 continuations.append(f"Ошибка: {str(e)}")
 
         return continuations
+
+    async def continue_story_with_direction(self, story: str, direction: str) -> str:
+        """Генерирует продолжение истории на основе выбранного направления"""
+        headers = {
+            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "Content-Type": "application/json",
+        }
+
+        data = {
+            "model": "google/gemini-2.5-flash",
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "Ты талантливый писатель. Продолжи историю в соответствии с указанным направлением развития сюжета. Напиши 2-3 новых параграфа, которые органично продолжают историю.",
+                },
+                {
+                    "role": "user",
+                    "content": f"Текущая история: {story}\n\nНаправление развития: {direction}\n\nПродолжи историю в этом направлении:",
+                },
+            ],
+            "max_tokens": 500,
+            "temperature": 0.8,
+        }
+
+        try:
+            response = await self.client.post(
+                OPENROUTER_URL,
+                json=data,
+                headers=headers,
+            )
+            response.raise_for_status()
+            result = response.json()
+            return result["choices"][0]["message"]["content"]
+        except Exception as e:
+            return f"Ошибка при продолжении истории: {str(e)}"
 
     async def close(self):
         """Закрывает HTTP клиент"""
@@ -163,8 +198,13 @@ async def continue_story(story_continuation: StoryContinuation):
             detail="Необходимо указать текущую историю и выбранное продолжение",
         )
 
-    # Объединяем историю с выбранным продолжением
-    extended_story = f"{story_continuation.story}\n\n{story_continuation.continuation}"
+    # Генерируем продолжение истории на основе выбранного направления
+    new_part = await story_generator.continue_story_with_direction(
+        story_continuation.story, story_continuation.continuation
+    )
+    
+    # Объединяем историю с новым сгенерированным продолжением
+    extended_story = f"{story_continuation.story}\n\n{new_part}"
     
     # Генерируем новые варианты продолжения
     continuations = await story_generator.generate_continuations(extended_story)
