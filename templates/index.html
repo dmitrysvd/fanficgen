@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Генератор историй</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .input-section {
+            margin-bottom: 30px;
+        }
+        label {
+            display: block;
+            margin-bottom: 10px;
+            font-weight: bold;
+            color: #555;
+        }
+        textarea, input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .story-section {
+            margin: 30px 0;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            border-left: 4px solid #007bff;
+        }
+        .continuations {
+            margin-top: 30px;
+        }
+        .continuation-option {
+            background: white;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 10px 0;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .continuation-option:hover {
+            border-color: #007bff;
+            background-color: #f0f8ff;
+        }
+        .loading {
+            text-align: center;
+            color: #666;
+            font-style: italic;
+        }
+        .error {
+            color: #dc3545;
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎭 Генератор историй</h1>
+        
+        <div class="input-section">
+            <label for="prompt">Введите затравку для вашей истории:</label>
+            <textarea id="prompt" placeholder="Например: В темном лесу стоял заброшенный замок..."></textarea>
+            <button onclick="generateStory()" id="generateBtn">Создать историю</button>
+        </div>
+
+        <div id="storySection" style="display: none;">
+            <div class="story-section">
+                <h3>📖 Ваша история:</h3>
+                <div id="storyText"></div>
+            </div>
+
+            <div class="continuations">
+                <h3>🎯 Что должно произойти дальше?</h3>
+                <div id="continuationOptions"></div>
+            </div>
+        </div>
+
+        <div id="loading" class="loading" style="display: none;">
+            Генерируем историю... ⏳
+        </div>
+
+        <div id="error" class="error" style="display: none;"></div>
+    </div>
+
+    <script>
+        let currentStory = '';
+
+        async function generateStory() {
+            const prompt = document.getElementById('prompt').value.trim();
+            if (!prompt) {
+                showError('Пожалуйста, введите затравку истории');
+                return;
+            }
+
+            showLoading(true);
+            hideError();
+            
+            try {
+                const response = await fetch('/generate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ prompt: prompt })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    currentStory = data.story;
+                    displayStory(data.story, data.continuations);
+                } else {
+                    showError(data.error || 'Произошла ошибка при генерации истории');
+                }
+            } catch (error) {
+                showError('Ошибка сети: ' + error.message);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function continueStory(continuation) {
+            showLoading(true);
+            hideError();
+
+            try {
+                const response = await fetch('/continue', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        story: currentStory, 
+                        continuation: continuation 
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    currentStory = data.story;
+                    displayStory(data.story, data.continuations);
+                } else {
+                    showError(data.error || 'Произошла ошибка при продолжении истории');
+                }
+            } catch (error) {
+                showError('Ошибка сети: ' + error.message);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function displayStory(story, continuations) {
+            document.getElementById('storyText').innerHTML = story.replace(/\n/g, '<br>');
+            
+            const optionsContainer = document.getElementById('continuationOptions');
+            optionsContainer.innerHTML = '';
+            
+            continuations.forEach((continuation, index) => {
+                const option = document.createElement('div');
+                option.className = 'continuation-option';
+                option.innerHTML = `<strong>Вариант ${index + 1}:</strong> ${continuation}`;
+                option.onclick = () => continueStory(continuation);
+                optionsContainer.appendChild(option);
+            });
+
+            document.getElementById('storySection').style.display = 'block';
+        }
+
+        function showLoading(show) {
+            document.getElementById('loading').style.display = show ? 'block' : 'none';
+            document.getElementById('generateBtn').disabled = show;
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+
+        function hideError() {
+            document.getElementById('error').style.display = 'none';
+        }
+
+        // Обработка Enter в textarea
+        document.getElementById('prompt').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && e.ctrlKey) {
+                generateStory();
+            }
+        });
+    </script>
+</body>
+</html>
