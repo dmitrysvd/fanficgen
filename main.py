@@ -5,22 +5,20 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import httpx
 import os
-import logging
 from typing import List
 from datetime import datetime
+from loguru import logger
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Настройка логирования
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('story_generator.log', encoding='utf-8'),
-        logging.StreamHandler()
-    ]
+# Настройка логирования с loguru
+logger.add(
+    "story_generator.log",
+    rotation="10 MB",
+    retention="7 days",
+    encoding="utf-8",
+    format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}"
 )
-logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Генератор историй",
