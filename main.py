@@ -78,7 +78,7 @@ class StoryGenerator:
                     "content": user_content,
                 },
             ],
-            "max_tokens": 500,
+            "max_tokens": 2000,
             "temperature": 0.8,
         }
 
@@ -123,11 +123,11 @@ class StoryGenerator:
             )
             response.raise_for_status()
             result = response.json()
-            
+
             # Парсим ответ, разделяя по строкам и убирая нумерацию
             response_text = result["choices"][0]["message"]["content"]
             lines = response_text.strip().split('\n')
-            
+
             continuations = []
             for line in lines:
                 # Убираем нумерацию (1., 2., 3. и т.д.) и лишние пробелы
@@ -141,17 +141,17 @@ class StoryGenerator:
                         parts = clean_line.split(' ', 1)
                         if len(parts) > 1:
                             clean_line = parts[1].strip()
-                
+
                 if clean_line:
                     continuations.append(clean_line)
-            
+
             # Если не удалось распарсить, возвращаем весь текст как один вариант
             if not continuations:
                 continuations = [response_text.strip()]
-            
+
             # Ограничиваем до 3 вариантов
             return continuations[:3]
-            
+
         except Exception as e:
             return [f"Ошибка: {str(e)}"]
 
@@ -174,7 +174,7 @@ class StoryGenerator:
                     "content": f"Текущая история: {story}\n\nНаправление развития: {direction}\n\nПродолжи историю в этом направлении:",
                 },
             ],
-            "max_tokens": 500,
+            "max_tokens": 2000,
             "temperature": 0.8,
         }
 
