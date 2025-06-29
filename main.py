@@ -16,8 +16,6 @@ logger.add(
     "story_generator.log",
     rotation="10 MB",
     retention="7 days",
-    encoding="utf-8",
-    format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}"
 )
 
 app = FastAPI(
