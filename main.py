@@ -8,6 +8,8 @@ import os
 from typing import List
 from datetime import datetime
 
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
 app = FastAPI(
     title="Генератор историй",
     description="Веб-сервис для генерации интерактивных историй",
@@ -17,12 +19,8 @@ app = FastAPI(
 templates = Jinja2Templates(directory="templates")
 
 # Конфигурация для OpenRouter API
-# OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "your-api-key-here")
-OPENROUTER_API_KEY = (
-    "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"
-)
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-MODEL = 'google/gemini-2.5-flash-lite-preview-06-17'
+MODEL = 'google/gemini-2.5-flash'
 
 
 # Pydantic модели для запросов
@@ -45,6 +43,14 @@ class StoryResponse(BaseModel):
     continuations: List[str] = []
 
 
+class Settings(BaseSettings):
+    OPENROUTER_API_KEY: str
+    model_config = SettingsConfigDict(env_file='.env')
+
+
+settings = Settings()  # type: ignore
+
+
 class StoryGenerator:
     def __init__(self):
         self.client = httpx.AsyncClient()
@@ -52,16 +58,16 @@ class StoryGenerator:
     async def generate_story(self, prompt: str, characters: str = "") -> str:
         """Генерирует историю на основе затравки и описания персонажей"""
         headers = {
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
             "Content-Type": "application/json",
         }
 
         user_content = f"Напиши начало истории на основе этой затравки: {prompt}"
         if characters.strip():
             user_content += f"\n\nОписание персонажей: {characters}"
-        
+
         data = {
-            "model": "google/gemini-2.5-flash",
+            "model": MODEL,
             "messages": [
                 {
                     "role": "system",
@@ -91,7 +97,7 @@ class StoryGenerator:
     async def generate_continuations(self, story: str) -> List[str]:
         """Генерирует варианты продолжения истории"""
         headers = {
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
             "Content-Type": "application/json",
         }
 
@@ -129,12 +135,12 @@ class StoryGenerator:
     async def continue_story_with_direction(self, story: str, direction: str) -> str:
         """Генерирует продолжение истории на основе выбранного направления"""
         headers = {
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
             "Content-Type": "application/json",
         }
 
         data = {
-            "model": "google/gemini-2.5-flash",
+            "model": MODEL,
             "messages": [
                 {
                     "role": "system",
@@ -207,10 +213,10 @@ async def continue_story(story_continuation: StoryContinuation):
     new_part = await story_generator.continue_story_with_direction(
         story_continuation.story, story_continuation.continuation
     )
-    
+
     # Объединяем историю с новым сгенерированным продолжением
     extended_story = f"{story_continuation.story}\n\n{new_part}"
-    
+
     # Генерируем новые варианты продолжения
     continuations = await story_generator.generate_continuations(extended_story)
 
@@ -224,14 +230,14 @@ async def download_story(story_download: StoryDownload):
             status_code=400,
             detail="Нет истории для скачивания"
         )
-    
+
     # Создаем имя файла с текущей датой и временем
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"story_{timestamp}.txt"
-    
+
     # Очищаем текст от HTML тегов если они есть
     clean_story = story_download.story.replace('<br>', '\n').replace('<br/>', '\n')
-    
+
     return Response(
         content=clean_story,
         media_type="text/plain",
