@@ -5,10 +5,22 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import httpx
 import os
+import logging
 from typing import List
 from datetime import datetime
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Настройка логирования
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('story_generator.log', encoding='utf-8'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Генератор историй",
@@ -83,6 +95,7 @@ class StoryGenerator:
         }
 
         try:
+            logger.info(f"Генерация истории - Промпт: {prompt[:100]}...")
             response = await self.client.post(
                 OPENROUTER_URL,
                 json=data,
@@ -90,8 +103,11 @@ class StoryGenerator:
             )
             response.raise_for_status()
             result = response.json()
-            return result["choices"][0]["message"]["content"]
+            generated_story = result["choices"][0]["message"]["content"]
+            logger.info(f"История сгенерирована успешно - Длина: {len(generated_story)} символов")
+            return generated_story
         except Exception as e:
+            logger.error(f"Ошибка при генерации истории: {str(e)}")
             return f"Ошибка при генерации истории: {str(e)}"
 
     async def generate_continuations(self, story: str) -> List[str]:
@@ -118,6 +134,7 @@ class StoryGenerator:
         }
 
         try:
+            logger.info(f"Генерация продолжений - История: {len(story)} символов")
             response = await self.client.post(
                 OPENROUTER_URL, json=data, headers=headers
             )
@@ -126,6 +143,7 @@ class StoryGenerator:
 
             # Парсим ответ, разделяя по строкам и убирая нумерацию
             response_text = result["choices"][0]["message"]["content"]
+            logger.info(f"Получен ответ для продолжений: {response_text}")
             lines = response_text.strip().split('\n')
 
             continuations = []
@@ -150,9 +168,12 @@ class StoryGenerator:
                 continuations = [response_text.strip()]
 
             # Ограничиваем до 3 вариантов
-            return continuations[:3]
+            final_continuations = continuations[:3]
+            logger.info(f"Сгенерировано {len(final_continuations)} продолжений: {final_continuations}")
+            return final_continuations
 
         except Exception as e:
+            logger.error(f"Ошибка при генерации продолжений: {str(e)}")
             return [f"Ошибка: {str(e)}"]
 
     async def continue_story_with_direction(self, story: str, direction: str) -> str:
@@ -179,6 +200,7 @@ class StoryGenerator:
         }
 
         try:
+            logger.info(f"Продолжение истории - Направление: {direction[:100]}...")
             response = await self.client.post(
                 OPENROUTER_URL,
                 json=data,
@@ -186,8 +208,11 @@ class StoryGenerator:
             )
             response.raise_for_status()
             result = response.json()
-            return result["choices"][0]["message"]["content"]
+            continuation = result["choices"][0]["message"]["content"]
+            logger.info(f"Продолжение сгенерировано успешно - Длина: {len(continuation)} символов")
+            return continuation
         except Exception as e:
+            logger.error(f"Ошибка при продолжении истории: {str(e)}")
             return f"Ошибка при продолжении истории: {str(e)}"
 
     async def close(self):
