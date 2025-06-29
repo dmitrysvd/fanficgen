@@ -101,36 +101,59 @@ class StoryGenerator:
             "Content-Type": "application/json",
         }
 
-        continuations = []
+        data = {
+            "model": MODEL,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "Ты талантливый писатель. Предложи 3 разных варианта того, что может произойти дальше в истории. Каждый вариант должен быть одним коротким предложением. Пронумеруй варианты от 1 до 3, каждый с новой строки.",
+                },
+                {
+                    "role": "user",
+                    "content": f"История: {story}\n\nПредложи 3 кратких варианта того, что должно произойти дальше:",
+                },
+            ],
+            "max_tokens": 150,
+            "temperature": 0.9,
+        }
 
-        for i in range(3):  # Генерируем 3 варианта
-            data = {
-                "model": MODEL,
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": "Ты талантливый писатель. Предложи очень краткое описание того, что может произойти дальше в истории. Отвечай одним коротким предложением.",
-                    },
-                    {
-                        "role": "user",
-                        "content": f"История: {story}\n\nПредложи краткий вариант того, что должно произойти дальше (одно короткое предложение):",
-                    },
-                ],
-                "max_tokens": 50,
-                "temperature": 0.9,
-            }
-
-            try:
-                response = await self.client.post(
-                    OPENROUTER_URL, json=data, headers=headers
-                )
-                response.raise_for_status()
-                result = response.json()
-                continuations.append(result["choices"][0]["message"]["content"])
-            except Exception as e:
-                continuations.append(f"Ошибка: {str(e)}")
-
-        return continuations
+        try:
+            response = await self.client.post(
+                OPENROUTER_URL, json=data, headers=headers
+            )
+            response.raise_for_status()
+            result = response.json()
+            
+            # Парсим ответ, разделяя по строкам и убирая нумерацию
+            response_text = result["choices"][0]["message"]["content"]
+            lines = response_text.strip().split('\n')
+            
+            continuations = []
+            for line in lines:
+                # Убираем нумерацию (1., 2., 3. и т.д.) и лишние пробелы
+                clean_line = line.strip()
+                if clean_line and (clean_line[0].isdigit() or clean_line.startswith('•') or clean_line.startswith('-')):
+                    # Убираем первые символы до первого пробела или точки
+                    parts = clean_line.split('.', 1)
+                    if len(parts) > 1:
+                        clean_line = parts[1].strip()
+                    else:
+                        parts = clean_line.split(' ', 1)
+                        if len(parts) > 1:
+                            clean_line = parts[1].strip()
+                
+                if clean_line:
+                    continuations.append(clean_line)
+            
+            # Если не удалось распарсить, возвращаем весь текст как один вариант
+            if not continuations:
+                continuations = [response_text.strip()]
+            
+            # Ограничиваем до 3 вариантов
+            return continuations[:3]
+            
+        except Exception as e:
+            return [f"Ошибка: {str(e)}"]
 
     async def continue_story_with_direction(self, story: str, direction: str) -> str:
         """Генерирует продолжение истории на основе выбранного направления"""
