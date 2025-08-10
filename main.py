@@ -73,7 +73,7 @@ class StoryGenerator:
 
         # Формируем контент для генерации истории
         user_content = f"Создай увлекательную историю во вселенной '{universe}' с главными персонажами: {main_characters}"
-        
+
         if prompt.strip():
             user_content += f"\n\nДополнительная затравка: {prompt}"
 
@@ -187,7 +187,7 @@ class StoryGenerator:
             "messages": [
                 {
                     "role": "system",
-                    "content": "Ты талантливый писатель. Продолжи историю в соответствии с указанным направлением развития сюжета. Напиши 2-3 новых параграфа, которые органично продолжают историю.",
+                    "content": "Ты талантливый писатель. Продолжи историю в соответствии с указанным направлением развития сюжета. Напиши 2-3 новых параграфа, которые органично продолжают историю. Фокус на плавном и многослойном развитии сюжета.",
                 },
                 {
                     "role": "user",
@@ -238,15 +238,15 @@ async def generate_story(story_prompt: StoryPrompt):
         raise HTTPException(
             status_code=400, detail="Необходимо выбрать вселенную"
         )
-    
+
     if not story_prompt.main_characters.strip():
         raise HTTPException(
             status_code=400, detail="Необходимо указать главных персонажей"
         )
 
     story = await story_generator.generate_story(
-        story_prompt.universe, 
-        story_prompt.main_characters, 
+        story_prompt.universe,
+        story_prompt.main_characters,
         story_prompt.prompt
     )
     continuations = await story_generator.generate_continuations(story)
