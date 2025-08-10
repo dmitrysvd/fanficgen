@@ -33,8 +33,9 @@ MODEL = 'google/gemini-2.5-flash'
 
 # Pydantic модели для запросов
 class StoryPrompt(BaseModel):
-    prompt: str
-    characters: str = ""
+    universe: str
+    main_characters: str
+    prompt: str = ""
 
 
 class StoryContinuation(BaseModel):
@@ -63,23 +64,25 @@ class StoryGenerator:
     def __init__(self):
         self.client = httpx.AsyncClient()
 
-    async def generate_story(self, prompt: str, characters: str = "") -> str:
-        """Генерирует историю на основе затравки и описания персонажей"""
+    async def generate_story(self, universe: str, main_characters: str, prompt: str = "") -> str:
+        """Генерирует историю на основе выбранной вселенной и персонажей"""
         headers = {
             "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
             "Content-Type": "application/json",
         }
 
-        user_content = f"Напиши начало истории на основе этой затравки: {prompt}"
-        if characters.strip():
-            user_content += f"\n\nОписание персонажей: {characters}"
+        # Формируем контент для генерации истории
+        user_content = f"Создай увлекательную историю во вселенной '{universe}' с главными персонажами: {main_characters}"
+        
+        if prompt.strip():
+            user_content += f"\n\nДополнительная затравка: {prompt}"
 
         data = {
             "model": MODEL,
             "messages": [
                 {
                     "role": "system",
-                    "content": "Ты талантливый писатель. Создавай увлекательные истории на основе затравки пользователя. Пиши 2-3 параграфа.",
+                    "content": f"Ты талантливый писатель, специализирующийся на создании историй в различных вселенных. Создавай увлекательные истории, соблюдая лор и атмосферу выбранной вселенной. Пиши 2-3 параграфа.",
                 },
                 {
                     "role": "user",
@@ -91,7 +94,7 @@ class StoryGenerator:
         }
 
         try:
-            logger.info(f"Генерация истории - Промпт: {prompt[:100]}...")
+            logger.info(f"Генерация истории - Вселенная: {universe}, Персонажи: {main_characters[:50]}...")
             response = await self.client.post(
                 OPENROUTER_URL,
                 json=data,
@@ -231,12 +234,21 @@ async def index(request: Request):
 
 @app.post("/generate", response_model=StoryResponse)
 async def generate_story(story_prompt: StoryPrompt):
-    if not story_prompt.prompt.strip():
+    if not story_prompt.universe.strip():
         raise HTTPException(
-            status_code=400, detail="Необходимо указать затравку истории"
+            status_code=400, detail="Необходимо выбрать вселенную"
+        )
+    
+    if not story_prompt.main_characters.strip():
+        raise HTTPException(
+            status_code=400, detail="Необходимо указать главных персонажей"
         )
 
-    story = await story_generator.generate_story(story_prompt.prompt, story_prompt.characters)
+    story = await story_generator.generate_story(
+        story_prompt.universe, 
+        story_prompt.main_characters, 
+        story_prompt.prompt
+    )
     continuations = await story_generator.generate_continuations(story)
 
     return StoryResponse(story=story, continuations=continuations)

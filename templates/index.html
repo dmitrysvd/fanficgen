@@ -32,13 +32,17 @@
             font-weight: bold;
             color: #555;
         }
-        textarea, input[type="text"] {
+        textarea, input[type="text"], select {
             width: 100%;
             padding: 12px;
             border: 2px solid #ddd;
             border-radius: 5px;
             font-size: 16px;
             box-sizing: border-box;
+        }
+        select {
+            background-color: white;
+            cursor: pointer;
         }
         textarea {
             min-height: 100px;
@@ -107,11 +111,26 @@
         <h1>🎭 Генератор историй</h1>
         
         <div class="input-section">
-            <label for="prompt">Введите затравку для вашей истории:</label>
-            <textarea id="prompt" placeholder="Например: В темном лесу стоял заброшенный замок..."></textarea>
+            <label for="universe">Выберите вселенную:</label>
+            <select id="universe">
+                <option value="">-- Выберите вселенную --</option>
+                <option value="Звездные войны">Звездные войны</option>
+                <option value="Властелин колец">Властелин колец</option>
+                <option value="Гарри Поттер">Гарри Поттер</option>
+                <option value="Игра престолов">Игра престолов</option>
+                <option value="Марвел">Марвел</option>
+                <option value="DC Comics">DC Comics</option>
+                <option value="Ведьмак">Ведьмак</option>
+                <option value="Warhammer 40000">Warhammer 40000</option>
+                <option value="Средиземье">Средиземье</option>
+                <option value="Cyberpunk">Cyberpunk</option>
+            </select>
             
-            <label for="characters">Описание персонажей (необязательно):</label>
-            <textarea id="characters" placeholder="Например: Главный герой - молодой рыцарь по имени Артур, храбрый но неопытный..."></textarea>
+            <label for="mainCharacters">Главные персонажи:</label>
+            <textarea id="mainCharacters" placeholder="Например: Люк Скайуокер, принцесса Лея, Хан Соло..."></textarea>
+            
+            <label for="prompt">Дополнительная затравка (необязательно):</label>
+            <textarea id="prompt" placeholder="Например: История начинается во время осады имперской базы..."></textarea>
             
             <button onclick="generateStory()" id="generateBtn">Создать историю</button>
         </div>
@@ -151,11 +170,17 @@
         let currentStory = '';
 
         async function generateStory() {
+            const universe = document.getElementById('universe').value.trim();
+            const mainCharacters = document.getElementById('mainCharacters').value.trim();
             const prompt = document.getElementById('prompt').value.trim();
-            const characters = document.getElementById('characters').value.trim();
             
-            if (!prompt) {
-                showError('Пожалуйста, введите затравку истории');
+            if (!universe) {
+                showError('Пожалуйста, выберите вселенную');
+                return;
+            }
+            
+            if (!mainCharacters) {
+                showError('Пожалуйста, укажите главных персонажей');
                 return;
             }
 
@@ -169,8 +194,9 @@
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({ 
-                        prompt: prompt,
-                        characters: characters
+                        universe: universe,
+                        main_characters: mainCharacters,
+                        prompt: prompt
                     })
                 });
 
@@ -180,7 +206,7 @@
                     currentStory = data.story;
                     displayStory(data.story, data.continuations);
                 } else {
-                    showError(data.error || 'Произошла ошибка при генерации истории');
+                    showError(data.detail || 'Произошла ошибка при генерации истории');
                 }
             } catch (error) {
                 showError('Ошибка сети: ' + error.message);
@@ -343,6 +369,12 @@
         }
 
         // Обработка Enter в textarea
+        document.getElementById('mainCharacters').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && e.ctrlKey) {
+                generateStory();
+            }
+        });
+        
         document.getElementById('prompt').addEventListener('keydown', function(e) {
             if (e.key === 'Enter' && e.ctrlKey) {
                 generateStory();
